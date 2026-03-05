@@ -1,7 +1,7 @@
 import bpy
 
 # TO_DO: MAKE THIS WORK WITH ARBITRARY FILES!!!
-output_dir = r"C:\Users\domin\Downloads\blender\samples"
+output_dir = r"C:\Users\domin\Documents\thesis\samples"
 classes = ['cube', 'pyramid', 'cylinder', 'cone', 'sphere', 'ring']
 
 # TO_DO: ADD PARAMETERS TO SAMPLE FROM!
@@ -16,8 +16,13 @@ def create_object(object_type):
                 location=(0, 0, 0)
             )
         case 'pyramid':
-            # TO_DO: CONSTRUCT PYRAMID
-            pass
+            bpy.ops.mesh.primitive_cone_add(
+                vertices =4,
+                radius1=1,
+                depth=2,
+                location=(0, 0, 0),
+                scale=(1,1,0.8)
+            )
         case 'cylinder':
             # Cylinder
             bpy.ops.mesh.primitive_cylinder_add(
@@ -72,29 +77,30 @@ def create_object(object_type):
 def create_camera_light(used_object):
     # TO_DO: MAKE LIGHT PARAMETERS ABLE TO BE SAMPLED
     # We create a random light source
-    lamp_data = bpy.data.lights.new(name="Lamp", type='POINT')
-    lamp_data.energy = 1000
-    lamp_object = bpy.data.objects.new(name="Lamp", object_data=lamp_data)
-    bpy.context.collection.objects.link(lamp_object)
-    lamp_object.location = (0, 0, 5)
+    light_data = bpy.data.lights.new(name="Lamp", type='POINT')
+    light_object = bpy.data.objects.new(name="Lamp", object_data=light_data)
+    bpy.context.collection.objects.link(light_object)
+
+    light_object.location = (0, 0, 5)
+    light_data.energy = 1000
 
     # TO_DO: ADD SAMPLE RANGES FOR BOTH AMBIGUOUS AND UNAMBIGUOUS VIEWS
-    bpy.ops.object.camera_add(location=(5, 5, 5))
-    #bpy.ops.object.camera_add(location=(0, 0, -5))
-    camera = bpy.context.active_object
+    camera_data = bpy.data.cameras.new(name="Camera")
+    camera_object = bpy.data.objects.new(name="Camera", object_data=camera_data)
+    bpy.context.collection.objects.link(camera_object)
+
+    camera_object.location = (5, 5, 5)
 
     # This script aligns the camera to the object.
-    direction = used_object.location - camera.location
-    rot_quat = direction.to_track_quat('-Z', 'Y')
-    camera.rotation_euler = rot_quat.to_euler()
-    return camera
+    constraint = camera_object.constraints.new(type='TRACK_TO')
+    constraint.target = used_object
+
+    return camera_object
 
 
 for class_name in classes:
     # TO_DO: AUTOMATE CREATING SAMPLES FOR AMBIGUOUS AND UNAMBIGUOUS SHAPES AND AUTOMATIC FOLDER BUILDING
     # REMOVE AFTER IMPLEMENTING PYRAMID FUNCTION
-    if class_name == "pyramid":
-        continue
 
     # By default, blender already contains a cube, camera and light in a scene.
     # Therefore, we must delete all existing objects first.
