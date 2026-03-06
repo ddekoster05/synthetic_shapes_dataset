@@ -1,8 +1,11 @@
 import bpy
+import os
 
-# TO_DO: MAKE THIS WORK WITH ARBITRARY FILES!!!
-output_dir = r"C:\Users\domin\Documents\thesis\samples"
+base_directory = os.path.dirname(os.path.abspath(__file__))
+output_directory = os.path.join(base_directory, "samples")
+
 classes = ['cube', 'pyramid', 'cylinder', 'cone', 'sphere', 'ring']
+sample_amount = 1
 
 # TO_DO: ADD PARAMETERS TO SAMPLE FROM!
 
@@ -58,19 +61,19 @@ def create_object(object_type):
     # Store a reference to the created object
     sampled_object = bpy.context.active_object
 
-    # TO_DO: STUDY MATERIALS AND MAKE THEM ABLE TO BE SAMPLED
+    # TO_DO: Make material properties able to be sampled
     # Create new material
-    mat = bpy.data.materials.new(name="MyMaterial")
-    mat.use_nodes = True  # Enable shader nodes
+    material = bpy.data.materials.new(name="MyMaterial")
 
     # Access Principled BSDF shader
-    bsdf = mat.node_tree.nodes["Principled BSDF"]
+    bsdf = material.node_tree.nodes["Principled BSDF"]
 
-    # Set base color (RGBA)
+    # Set properties of the object
     bsdf.inputs["Base Color"].default_value = (1, 0, 0, 1)
+    bsdf.inputs["Metallic"].default_value = 0.3
 
     # Assign material to object
-    sampled_object.data.materials.append(mat)
+    sampled_object.data.materials.append(material)
 
     return sampled_object
 
@@ -81,6 +84,7 @@ def create_camera_light(used_object):
     light_object = bpy.data.objects.new(name="Lamp", object_data=light_data)
     bpy.context.collection.objects.link(light_object)
 
+    # Set properties of the light
     light_object.location = (0, 0, 5)
     light_data.energy = 1000
 
@@ -99,19 +103,21 @@ def create_camera_light(used_object):
 
 
 for class_name in classes:
-    # TO_DO: AUTOMATE CREATING SAMPLES FOR AMBIGUOUS AND UNAMBIGUOUS SHAPES AND AUTOMATIC FOLDER BUILDING
-    # REMOVE AFTER IMPLEMENTING PYRAMID FUNCTION
+    # TO_DO: AUTOMATE CREATING SAMPLES FOR AMBIGUOUS AND UNAMBIGUOUS SHAPES
 
-    # By default, blender already contains a cube, camera and light in a scene.
-    # Therefore, we must delete all existing objects first.
-    bpy.ops.object.select_all(action='SELECT')
-    bpy.ops.object.delete(use_global=False)
+    class_directory = os.path.join(output_directory, class_name)
 
-    # Generate an object and a camera viewpoint.
-    current_object = create_object(class_name)
-    generated_camera = create_camera_light(current_object)
+    for i in range(sample_amount):
+        # By default, blender already contains a cube, camera and light in a scene.
+        # Therefore, we must delete all existing objects first.
+        bpy.ops.object.select_all(action='SELECT')
+        bpy.ops.object.delete(use_global=False)
 
-    # Render the scene using the generated camera point
-    bpy.context.scene.camera = generated_camera
-    bpy.context.scene.render.filepath = f"{output_dir}/sample_{class_name}.png"
-    bpy.ops.render.render(write_still=True)
+        # Generate an object and a camera viewpoint.
+        current_object = create_object(class_name)
+        generated_camera = create_camera_light(current_object)
+
+        # Render the scene using the generated camera point
+        bpy.context.scene.camera = generated_camera
+        bpy.context.scene.render.filepath = f"{class_directory}/{class_name}_{i}.png"
+        bpy.ops.render.render(write_still=True)
