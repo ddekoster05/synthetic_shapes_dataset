@@ -2,11 +2,13 @@ import bpy
 import os
 import numpy as np
 
+np.random.seed(42)
+
 base_directory = os.path.dirname(os.path.abspath(__file__))
 output_directory = os.path.join(base_directory, "samples")
 
 classes = ['cube', 'pyramid', 'cylinder', 'cone', 'sphere', 'ring']
-sample_amount = 20
+sample_amount = 1000
 
 
 def create_object(object_type):
