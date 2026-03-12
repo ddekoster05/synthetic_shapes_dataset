@@ -15,7 +15,6 @@ def create_object(object_type):
             # Cube
             base_size = np.random.uniform(0.3,3)
             bpy.ops.mesh.primitive_cube_add(
-                #size=2.0,
                 size=1,
                 location=(0, 0, 0),
                 scale=(base_size, base_size, base_size)
@@ -35,11 +34,10 @@ def create_object(object_type):
             )
         case 'cylinder':
             # Cylinder
+            # Again, cylinder and cone are linked classes, thus their sampling parameters are identical.
             bpy.ops.mesh.primitive_cylinder_add(
                 vertices=64,
-                #radius=1,
                 radius=np.random.uniform(0.3,2),
-                #depth=2,
                 depth=np.random.uniform(0.3,3),
                 location=(0, 0, 0)
             )
@@ -47,26 +45,21 @@ def create_object(object_type):
             # Cone
             bpy.ops.mesh.primitive_cone_add(
                 vertices=64,
-                #radius1=1,
                 radius1=np.random.uniform(0.3,2),
                 radius2=0,
-                #depth=2,
                 depth=np.random.uniform(0.3,3),
                 location=(0, 0, 0)
             )
         case 'sphere':
             # Sphere
             bpy.ops.mesh.primitive_uv_sphere_add(
-                #radius=1,
                 radius=np.random.uniform(0.3,2),
                 location=(0, 0, 0),
             )
         case 'ring':
             # Ring
             bpy.ops.mesh.primitive_torus_add(
-               #major_radius=1,
                 major_radius=(np.random.uniform(1.2,2)),
-                #minor_radius=0.3,
                 minor_radius=np.random.uniform(0.3, 1),
                 location=(0, 0, 0)
             )
@@ -81,11 +74,9 @@ def create_object(object_type):
     bsdf = material.node_tree.nodes["Principled BSDF"]
 
     # Set properties of the object
-    #bsdf.inputs["Base Color"].default_value = (1, 0, 0, 1)
-    bsdf.inputs["Base Color"].default_value = (np.random.uniform(0.0,1.0),
-                                               np.random.uniform(0.0,1.0),
-                                               np.random.uniform(0.0,1.0),
-                                               1)
+    # We sample from a grayscale, as the pictures of real objects will also be converted to a grayscale.
+    color = np.random.uniform(0.15,0.6)
+    bsdf.inputs["Base Color"].default_value = (color,color,color,1)
     bsdf.inputs["Metallic"].default_value = np.random.uniform(0.0,1.0)
 
     # Assign material to object
@@ -99,26 +90,29 @@ def create_camera_light(used_object, informative):
     light_object = bpy.data.objects.new(name="Lamp", object_data=light_data)
     bpy.context.collection.objects.link(light_object)
 
-    # Set properties of the light
-    #light_object.location = (0, 0, 5)
-    # With this configuration, the source can never be in the object, but that also means it cannot be on top of it.
-    light_object.location = (np.random.uniform(2.5,5),
-                             np.random.uniform(2.5,5),
-                             np.random.uniform(1.0,5.0)
-                             )
-    #light_data.energy = 1000
-    light_data.energy = np.random.uniform(10,1000)
+    # Set brightness of the light
+    light_data.energy = np.random.uniform(1000,10000)
 
     camera_data = bpy.data.cameras.new(name="Camera")
     camera_object = bpy.data.objects.new(name="Camera", object_data=camera_data)
     bpy.context.collection.objects.link(camera_object)
 
     if informative:
+        # Place the light source and the camera around the object
+        light_object.location = (np.random.uniform(2.5, 5),
+                                 np.random.uniform(2.5, 5),
+                                 np.random.uniform(1.0, 5.0)
+                                 )
         camera_object.location = (np.random.uniform(2,10),
                                   np.random.uniform(2,10),
                                   np.random.uniform(0,10)
                                   )
     else:
+        # Place the light source and the camera under the object
+        light_object.location = (np.random.uniform(2.5, 5),
+                                 np.random.uniform(2.5, 5),
+                                 np.random.uniform(-2, -5)
+                                 )
         camera_object.location = (np.random.uniform(0, used_object.dimensions[0]),
                                   np.random.uniform(0, used_object.dimensions[1]),
                                   np.random.uniform(-3,-5))
@@ -135,6 +129,7 @@ def generate_samples(class_name, file_location, amount, informative):
         # Therefore, we must delete all existing objects first.
         bpy.ops.object.select_all(action='SELECT')
         bpy.ops.object.delete(use_global=False)
+        bpy.context.scene.world.node_tree.nodes["Background"].inputs["Color"].default_value = (0, 0, 0, 0)
 
         # Generate an object and a camera viewpoint.
         current_object = create_object(class_name)
