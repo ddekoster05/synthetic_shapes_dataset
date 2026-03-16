@@ -8,7 +8,7 @@ from torch.utils.data import random_split, DataLoader
 from torchvision import models
 from torchvision import transforms
 
-batch_size = 128
+batch_size = 256
 num_classes = 6
 
 transform = transforms.Compose([
@@ -114,10 +114,75 @@ def train(model, train_loader, val_loader, optimizer, criterion, device,
                 pbar.update(1)
                 pbar.set_postfix(loss=loss.item())
 
+            # Compute average loss and accuracy on the validation dataset after one epoch
             avg_loss, accuracy = evaluate(model, val_loader, criterion, device)
             print(
                 f'Validation set: Average loss = {avg_loss:.4f}, Accuracy = {accuracy:.4f}'
             )
+
+def get_view_type_from_path(path):
+    if "uninformative" in path:
+        return "uninformative"
+    else:
+        return "informative"
+
+
+def test(model, dataset, test_dataset, device):
+    """
+    Test the model accuracy for informative and uninformative views separately
+
+    Args:
+    :param model:
+    :param test_loader:
+    :param device:
+    """
+
+    with torch.no_grad():
+
+        # Initialize variables
+        informative_correct = 0
+        informative_samples = 0
+
+        uninformative_correct = 0
+        uninformative_samples = 0
+
+        for i in test_dataset.indices:
+            # Retrieve path and label from the dataset, only for the test set
+            path, label = dataset.samples[i]
+
+            # Load and transform the image and label, and move to device
+            img = dataset.loader(path)
+            img = dataset.transform(img).unsqueeze(0).to(device)
+            label = torch.tensor([label]).to(device)
+
+            # Compute the logits and loss
+            logits = model(img)
+            prediction = torch.argmax(logits, dim=1)
+
+            # Count the prediction as correct if it is identical to the label
+            if prediction == label:
+                correct = 1
+            else:
+                correct = 0
+
+            # Determine if an uninformative or informative view was used
+            view_type = get_view_type_from_path(path)
+
+            # Keep track of performance
+            if view_type == "informative":
+                informative_samples += 1
+                informative_correct += correct
+            else:
+                uninformative_samples += 1
+                uninformative_correct += correct
+
+    # Calculate accuracy
+    informative_accuracy = informative_correct / informative_samples
+    uninformative_accuracy = uninformative_correct / uninformative_samples
+
+    # Report accuracy
+    print(f"Informative accuracy   : {informative_accuracy:.4f}, based on {informative_samples} samples")
+    print(f"Uninformative accuracy : {uninformative_accuracy:.4f}, based on {uninformative_samples} samples")
 
 # Choose GPU if available
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -141,3 +206,5 @@ train(model, train_dataloader, validation_dataloader, optimizer, criterion,
 # Save trained model once finished
 torch.save({'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict()}, 'model_baseline.ckpt')
+
+test(model, dataset, test_dataset, device)

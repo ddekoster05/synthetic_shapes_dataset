@@ -1,3 +1,4 @@
 .idea/
 .venv/
 samples/
+model_baseline.ckpt
