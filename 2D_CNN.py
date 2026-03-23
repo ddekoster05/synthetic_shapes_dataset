@@ -201,7 +201,7 @@ model.classifier[6] = nn.Linear(4096, num_classes)
 optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=1e-4)
 criterion = nn.CrossEntropyLoss()
 train(model, train_dataloader, validation_dataloader, optimizer, criterion,
-      device, num_epochs=3)
+      device, num_epochs=10)
 
 # Save trained model once finished
 torch.save({'model_state_dict': model.state_dict(),

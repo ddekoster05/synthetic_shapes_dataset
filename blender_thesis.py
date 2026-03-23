@@ -1,6 +1,7 @@
 import bpy
 import os
 import numpy as np
+import math
 
 np.random.seed(42)
 
@@ -99,6 +100,10 @@ def create_camera_light(used_object, informative):
     camera_object = bpy.data.objects.new(name="Camera", object_data=camera_data)
     bpy.context.collection.objects.link(camera_object)
 
+    # This script aligns the camera to the object.
+    constraint = camera_object.constraints.new(type='TRACK_TO')
+    constraint.target = used_object
+
     if informative:
         # Place the light source and the camera around the object
         light_object.location = (np.random.uniform(2.5, 5),
@@ -109,6 +114,7 @@ def create_camera_light(used_object, informative):
                                   np.random.uniform(2,10),
                                   np.random.uniform(0,10)
                                   )
+
     else:
         # Place the light source and the camera under the object
         light_object.location = (np.random.uniform(2.5, 5),
@@ -119,9 +125,10 @@ def create_camera_light(used_object, informative):
                                   np.random.uniform(0, used_object.dimensions[1]),
                                   np.random.uniform(-3,-5))
 
-    # This script aligns the camera to the object.
-    constraint = camera_object.constraints.new(type='TRACK_TO')
-    constraint.target = used_object
+        # Make the camera face upwards
+        constraint.track_axis = 'TRACK_NEGATIVE_Z'
+        constraint.up_axis = 'UP_Y'
+
 
     return camera_object
 
