@@ -121,9 +121,9 @@ def create_camera_light(used_object, informative):
                                  np.random.uniform(2.5, 5),
                                  np.random.uniform(-2, -5)
                                  )
-        camera_object.location = (np.random.uniform(0, used_object.dimensions[0]),
-                                  np.random.uniform(0, used_object.dimensions[1]),
-                                  np.random.uniform(-3,-5))
+        camera_object.location = (np.random.uniform(0, 0.5),
+                                  np.random.uniform(0, 0.5),
+                                  np.random.uniform(-2,-4))
 
         # Make the camera face upwards
         constraint.track_axis = 'TRACK_NEGATIVE_Z'
