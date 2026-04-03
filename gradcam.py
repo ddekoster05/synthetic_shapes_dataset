@@ -18,8 +18,22 @@ transform = transforms.Compose([
     transforms.ToTensor(),
 ])
 
+class_names = ["cone", "cube", "cylinder", "pyramid", "ring", "sphere"]
+
 # Locate the base directory
 base_directory = os.path.dirname(os.path.abspath(__file__))
+
+def prepare_image(image):
+    """
+    Prepares the image for PyTorch.
+
+    :return: a processed and transformed image
+    """
+    image = transform(image)
+    image = image.unsqueeze(0)
+
+    return image
+
 
 def load_model(type):
     if type == "2D":
@@ -37,88 +51,137 @@ def load_model(type):
 
     return model
 
-def compute_heatmap(model,img):
-    """
-    Adapted from https://medium.com/@bmuskan007/grad-cam-a-beginners-guide-adf68e80f4bb
+def print_prediction(pred):
+    pred_idx = pred.item()
+    class_name = class_names[pred_idx]
+    print(f"Prediction: {class_name} (class {pred_idx})")
 
-    :param model:
-    :param img:
-    :return:
+# Example of a forwards hook function
+def forwards_hook(module, input, output):
     """
-    # compute logits from the model
-    logits = model(img)
-    # model's prediction
-    pred = logits.max(-1)[-1]
-    # activations from the model
-    activations = image_to_heatmaps(img)
-    print(activations)
-    # compute gradients with respect to the model's most confident prediction
-    logits[0, pred].backward(retain_graph=True)
-    # average gradients of the featuremap
-    # Change this line to inspect per layer?
-    pool_grads = model.features[-3].weight.grad.data.mean((0,2,3))
-    print(pool_grads)
-    # multiply each activation map with corresponding gradient average
-    # This should probably be changed for the 3D CNN
-    for i in range(activations.shape[1]):
-        activations[:,i,:,:] *= pool_grads[i]
-    # calculate mean of weighted activations
-    heatmap = torch.mean(activations, dim=1)[0].cpu().detach()
-    return heatmap, pred
+    Adapted from https://towardsdatascience.com/grad-cam-from-scratch-with-pytorch-hooks/
 
-def upsampleHeatmap(map, image):
-    """
-    Adapted from https://medium.com/@bmuskan007/grad-cam-a-beginners-guide-adf68e80f4bb
-    :param map:
-    :param image:
-    :return:
-    """
-    # permute image
-    image = image.squeeze(0).permute(1, 2, 0).cpu().numpy()
-    # maximum and minimum value from heatmap
-    m, M = map.min(), map.max()
-    # normalize the heatmap
-    map = 255 * ((map-m)/ (m-M))
-    map = np.uint8(map)
-    # resize the heatmap to the same as the input
-    map = cv2.resize(map, (224, 224))
-    map = cv2.applyColorMap(255-map, cv2.COLORMAP_JET)
-    map = np.uint8(map)
-    # change this to balance between heatmap and image
-    map = np.uint8(map*0.7 + image*0.3)
-    return map
+    Parameters:
+            module (nn.Module): The module where the hook is applied.
+            input (tuple of Tensors): Input to the module.
+            output (Tensor): Output of the module."""
+    ...
 
-def display_images(upsampled_map, image):
-    """
-    Adapted from https://medium.com/@bmuskan007/grad-cam-a-beginners-guide-adf68e80f4bb
+# Example of a backwards hook function
+def backwards_hook(module, grad_in, grad_out):
 
-    :param upsampled_map:
-    :param image:
-    :return:
     """
-    image = image.squeeze(0).permute(1, 2, 0)
-    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+    Adapted from https://towardsdatascience.com/grad-cam-from-scratch-with-pytorch-hooks/
 
-    axes[0].imshow(upsampled_map)
-    axes[0].set_title("Heatmap")
-    axes[0].axis('off')
-    axes[1].imshow(image)
-    axes[1].set_title("Original Image")
-    axes[1].axis('off')
+    Parameters:
+            module (nn.Module): The module where the hook is applied.
+            grad_in (tuple of Tensors): Gradients w.r.t. the input of the module.
+            grad_out (tuple of Tensors): Gradients w.r.t. the output of the module."""
+    ...
+
+# Replace all in-place ReLU activations with out-of-place ones
+def replace_relu(model):
+
+    for name, child in model.named_children():
+        if isinstance(child, torch.nn.ReLU):
+            setattr(model, name, torch.nn.ReLU(inplace=False))
+            print(f"Replacing ReLU activation in layer: {name}")
+        else:
+            replace_relu(child)  # Recursively apply to submodules
+
+# List to store activations
+activations = []
+
+# Function to save activations
+def save_activations(module, input, output):
+    activations.append(output.detach().cpu().numpy().squeeze())
+
+# List to store gradients
+gradients = []
+
+def save_gradient(module, grad_in, grad_out):
+    # Adapted from https://towardsdatascience.com/grad-cam-from-scratch-with-pytorch-hooks/
+    gradients.append(grad_out[0].cpu().numpy().squeeze())
+
+def compute_heatmap(model,image, layer):
+    # Adapted from https://towardsdatascience.com/grad-cam-from-scratch-with-pytorch-hooks/
+    hook = model.features[layer].register_forward_hook(save_activations)
+    prediction = model(image)
+    hook.remove()
+
+    act_shape = np.shape(activations[0])
+    print(f"Shape of activations: {act_shape}")  # (512, 14, 14)
+
+    # Register the backward hook on a convolutional layer
+    hook = model.features[layer].register_full_backward_hook(save_gradient)
+    # Forward pass
+    output = model(image)
+    # Pick the class with highest score
+    score = output[0].max()
+    # Backward pass from the score
+    score.backward()
+    # Remove the hook after use
+    hook.remove()
+
+    grad_shape = np.shape(gradients[0])
+    print(f"Shape of gradients: {grad_shape}")  # (512, 14, 14)
+    loaded_model.zero_grad()
+
+    # Step 1: aggregate the gradients
+    gradients_aggregated = np.mean(gradients[0], axis=(1, 2))
+
+    # Step 2: weight the activations by the aggregated gradients and sum them up
+    weighted_activations = np.sum(activations[0] *
+                                  gradients_aggregated[:, np.newaxis, np.newaxis],
+                                  axis=0)
+
+    # Step 3: ReLU summed activations
+    relu_weighted_activations = np.maximum(weighted_activations, 0)
+
+    return relu_weighted_activations
+
+def upsampleHeatmap(relu_weighted_activations, image):
+    # Adapted from https://towardsdatascience.com/grad-cam-from-scratch-with-pytorch-hooks/
+    # Step 4: Upsample the heatmap to the original image size
+    upsampled_heatmap = cv2.resize(relu_weighted_activations,
+                                   (test_image.size(3), test_image.size(2)),
+                                   interpolation=cv2.INTER_LINEAR)
+
+    print(np.shape(upsampled_heatmap))  # Should be (224, 224)
+
+    return upsampled_heatmap
+
+def display_images(upsampled_heatmap, original_image):
+    # Adapted from https://towardsdatascience.com/grad-cam-from-scratch-with-pytorch-hooks/
+    # Step 5: visualise the heatmap
+    fig, ax = plt.subplots(1, 2, figsize=(8, 8))
+
+    # Input image
+    resized_img = original_image.resize((224, 224))
+    ax[0].imshow(resized_img)
+    ax[0].axis("off")
+
+    # Edge map for the input image
+    edge_img = cv2.Canny(np.array(resized_img), 100, 200)
+    ax[1].imshow(255 - edge_img, alpha=0.5, cmap='gray')
+
+    # Overlay the heatmap
+    ax[1].imshow(upsampled_heatmap, alpha=0.5, cmap='coolwarm')
+    ax[1].axis("off")
+
     plt.show()
 
+# Load the model of choice
 loaded_model = load_model("2D")
+# Replace ReLU activations such that they don't switch
+replace_relu(loaded_model)
 
-# selecting layers from the model to generate activations
-image_to_heatmaps = nn.Sequential(*list(loaded_model.features[:-4]))
+# Prepare a test image, compute the gradients, and upsample the feature map
+image_directory = os.path.join(base_directory, "samples", "ring", "ring_informative_23.png")
+original_image = Image.open(image_directory).convert("RGB")
+test_image = prepare_image(original_image)
 
-test_image = os.path.join(base_directory, "samples", "ring", "ring_informative_1.png")
-test_image = Image.open(test_image).convert("RGB")
-test_image = transform(test_image)
-
-test_image = test_image.unsqueeze(0)
-heatmap,pred = compute_heatmap(loaded_model,test_image)
-upsampled_map = upsampleHeatmap(heatmap, test_image)
-print(f"Prediction: {pred}")
-
-display_images(upsampled_map, test_image)
+# Obtain the relu weighted activations, upsample the heatmap and display it.
+relu_weighted_activations = compute_heatmap(loaded_model, test_image, 10)
+upsampled_heatmap = upsampleHeatmap(relu_weighted_activations, test_image)
+display_images(upsampled_heatmap, original_image)

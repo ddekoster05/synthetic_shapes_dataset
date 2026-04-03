@@ -16,7 +16,7 @@ def create_object(object_type):
     match object_type:
         case 'cube':
             # Cube
-            base_size = np.random.uniform(0.3,3)
+            base_size = np.random.uniform(0.3,1)
             bpy.ops.mesh.primitive_cube_add(
                 size=1,
                 location=(0, 0, 0),
@@ -26,21 +26,21 @@ def create_object(object_type):
             # Pyramid
             # Since cube and pyramid are 'linked classes', the sampling sizes and parameters should be identical,
             # otherwise model shortcuts may occur.
-            base_size = np.random.uniform(0.3,3)
+            base_size = np.random.uniform(0.3,1)
+            radius = base_size / np.sqrt(2)
             bpy.ops.mesh.primitive_cone_add(
                 vertices=4,
-                radius1=1,
-                #depth=2,
+                radius1=radius,
                 depth=1,
                 location=(0, 0, 0),
-                scale=(base_size,base_size,np.random.uniform(0.3,3))
+                scale=(1,1,np.random.uniform(0.3,3))
             )
         case 'cylinder':
             # Cylinder
             # Again, cylinder and cone are linked classes, thus their sampling parameters are identical.
             bpy.ops.mesh.primitive_cylinder_add(
                 vertices=64,
-                radius=np.random.uniform(0.3,2),
+                radius=np.random.uniform(0.3,0.5),
                 depth=np.random.uniform(0.3,3),
                 location=(0, 0, 0)
             )
@@ -48,7 +48,7 @@ def create_object(object_type):
             # Cone
             bpy.ops.mesh.primitive_cone_add(
                 vertices=64,
-                radius1=np.random.uniform(0.3,2),
+                radius1=np.random.uniform(0.3,0.5),
                 radius2=0,
                 depth=np.random.uniform(0.3,3),
                 location=(0, 0, 0)
@@ -123,7 +123,7 @@ def create_camera_light(used_object, informative):
                                  )
         camera_object.location = (np.random.uniform(0, 0.5),
                                   np.random.uniform(0, 0.5),
-                                  np.random.uniform(-2,-4))
+                                  np.random.uniform(-2.5,-3))
 
         # Make the camera face upwards
         constraint.track_axis = 'TRACK_NEGATIVE_Z'
