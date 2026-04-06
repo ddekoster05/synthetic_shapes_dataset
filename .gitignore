@@ -3,3 +3,4 @@
 samples/
 model_baseline.ckpt
 model_multiview.ckpt
+evidence/
