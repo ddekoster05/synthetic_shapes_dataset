@@ -7,12 +7,11 @@ import matplotlib.pyplot as plt
 
 import torch
 import torch.nn as nn
-import torchvision
 from torchvision import models
 from torchvision import transforms
 
 num_classes = 6
-model_type  = "3D"
+model_type  = "2D"
 
 transform = transforms.Compose([
     transforms.Resize((224,224)),
@@ -34,6 +33,8 @@ def prepare_2D(image):
     image = transform(image)
     image = image.unsqueeze(0)
 
+    print(f"Prepared image shape: {image.shape}")
+
     return image
 
 def prepare_3D(image1, image2):
@@ -54,6 +55,7 @@ def prepare_3D(image1, image2):
     prepared_images = torch.stack([image1, image2], dim=1)
     # Add the batch dimension that is lost for single exemplars
     prepared_images = prepared_images.unsqueeze(0)
+    print(f"Prepared images shape: {prepared_images.shape}")
 
     return prepared_images
 
@@ -80,7 +82,7 @@ def load_model(type):
     return model
 
 def print_prediction(pred):
-    pred_idx = pred.item()
+    pred_idx = torch.argmax(pred, dim=1).item()
     class_name = class_names[pred_idx]
     print(f"Prediction: {class_name} (class {pred_idx})")
 
@@ -138,26 +140,29 @@ def compute_heatmap(model_type, model, image, layer):
 
     :param model: The model to be used
     :param image: The image to be evaluated on
-    :param layer: The layer to be evaluated on
+    :param layer: The layer to be evaluated on. Only works for the 2D model,
+    as the 3D model collapses in temporal dimension after the first layer.
     :return: A heatmap of the given image
     """
+    activations.clear()
+    gradients.clear()
+
     if model_type == "2D":
         hook = model.features[layer].register_forward_hook(save_activations)
     else:
-        # TO-DO: MAKE THE LAYER OF THE 3D MODEL SELECTABLE!
         layer = model.layer4[1].conv2
         hook = layer.register_forward_hook(save_activations)
     prediction = model(image)
+    print_prediction(prediction)
     hook.remove()
 
     act_shape = np.shape(activations[0])
-    print(f"Shape of activations: {act_shape}")  # (512, 14, 14)
+    print(f"Shape of activations: {act_shape}")
 
     # Register the backward hook on a convolutional layer
     if model_type == "2D":
-        hook = model.features[layer].register_full_backward_hook(save_gradient)
+        hook = model.features[layer].register_backward_hook(save_gradient)
     else:
-        #layer = model.layer4[1].conv2
         hook = layer.register_backward_hook(save_gradient)
     # Forward pass
     output = model(image)
@@ -168,10 +173,9 @@ def compute_heatmap(model_type, model, image, layer):
     # Remove the hook after use
     hook.remove()
 
-    print(gradients)
     # Obtain shape of the gradients
     grad_shape = np.shape(gradients[0])
-    print(f"Shape of gradients: {grad_shape}")  # (512, 14, 14)
+    print(f"Shape of gradients: {grad_shape}")
     model.zero_grad()
 
     # Aggregrate all gradients
@@ -200,30 +204,15 @@ def upsampleHeatmap(model_type, relu_weighted_activations, image):
         upsampled_heatmap = cv2.resize(relu_weighted_activations,
                                     (image.size(3), image.size(2)),
                                     interpolation=cv2.INTER_LINEAR)
-
-        print(np.shape(upsampled_heatmap))  # Should be (224, 224)
     else:
-        print(relu_weighted_activations.shape)
-        T = relu_weighted_activations.shape[0]
-        H, W = image.shape[3], image.shape[4]
-
-        upsampled_heatmap = []
-
-        for t in range(T):
-            frame = cv2.resize(
-                relu_weighted_activations[t],
-                (W, H),
-                interpolation=cv2.INTER_LINEAR
-            )
-            upsampled_heatmap.append(frame)
-
-        upsampled_heatmap = np.array(upsampled_heatmap)
-
-        print(np.shape(upsampled_heatmap))
+        upsampled_heatmap = cv2.resize(relu_weighted_activations,
+                                    (image.size(4), image.size(3)),
+                                    interpolation=cv2.INTER_LINEAR)
+    print(np.shape(upsampled_heatmap))
 
     return upsampled_heatmap
 
-def display_images(upsampled_heatmap, original_image):
+def display_images_2D(upsampled_heatmap, original_image):
     """
     Show the upsampled heatmap and original image
 
@@ -249,6 +238,38 @@ def display_images(upsampled_heatmap, original_image):
 
     plt.show()
 
+def display_images_3D(upsampled_heatmap, original_image1, original_image2):
+    """
+    Show the upsampled heatmap and a combination of the original images
+
+    :param upsampled_heatmap: the upsampled heatmap
+    :param original_image1: the first original image
+    :param original_image2: the second original image
+    :return: None
+    """
+    # Visualise the heatmap
+    fig, ax = plt.subplots(1, 2, figsize=(8, 8))
+
+    #Input image
+    img1 = original_image1.resize((224, 224))
+    img2 = original_image2.resize((224, 224))
+
+    # Merge images
+    merged = (np.array(img1).astype(float) + np.array(img2).astype(float)) / 2
+    merged = merged.astype(np.uint8)
+    ax[0].imshow(merged)
+    ax[0].axis("off")
+
+    # Edge map for the input image
+    edge_img = cv2.Canny(merged, 100, 200)
+    ax[1].imshow(255 - edge_img, alpha=0.5, cmap='gray')
+
+    # Overlay the heatmap
+    ax[1].imshow(upsampled_heatmap, alpha=0.5, cmap='coolwarm')
+    ax[1].axis("off")
+
+    plt.show()
+
 # Load the model of choice
 loaded_model = load_model(model_type)
 # Replace ReLU activations such that they don't switch
@@ -257,14 +278,22 @@ replace_relu(loaded_model)
 # Prepare a test image
 image_directory = os.path.join(base_directory, "samples", "ring", "ring_informative_23.png")
 original_image = Image.open(image_directory).convert("RGB")
-#test_image = prepare_2D(original_image)
+
 image1_directory = os.path.join(base_directory, "samples", "cube", "uninformative", "cube_uninformative_23.png")
 image2_directory = os.path.join(base_directory, "samples", "cube", "informative", "cube_informative_23.png")
 original_image1 = Image.open(image1_directory).convert("RGB")
 original_image2 = Image.open(image2_directory).convert("RGB")
-test_image = prepare_3D(original_image1, original_image2)
+if model_type == "2D":
+    test_image = prepare_2D(original_image)
+else:
+    test_image = prepare_3D(original_image1, original_image2)
 
-# Obtain the relu weighted activations, upsample the heatmap and display it.
-relu_weighted_activations = compute_heatmap(model_type, loaded_model, test_image, 10)
+# Obtain the relu weighted activations and upsample the heatmap.
+relu_weighted_activations = compute_heatmap(model_type, loaded_model, test_image, 1)
 upsampled_heatmap = upsampleHeatmap(model_type, relu_weighted_activations, test_image)
-display_images(upsampled_heatmap, original_image)
+
+# Display the heatmap and the original images
+if model_type == "2D":
+    display_images_2D(upsampled_heatmap, original_image)
+else:
+    display_images_3D(upsampled_heatmap, original_image1, original_image2)
