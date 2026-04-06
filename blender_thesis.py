@@ -9,7 +9,7 @@ base_directory = os.path.dirname(os.path.abspath(__file__))
 output_directory = os.path.join(base_directory, "samples")
 
 classes = ['cube', 'pyramid', 'cylinder', 'cone', 'sphere', 'ring']
-sample_amount = 20
+sample_amount = 1000
 
 
 def create_object(object_type):
@@ -127,7 +127,7 @@ def create_camera_light(used_object, informative):
                                   #np.random.uniform(-2.5,-3))
         camera_object.location = (0,
                                   0,
-                                  -2.5)
+                                  -3)
 
         # Make the camera face upwards
         constraint.track_axis = 'TRACK_NEGATIVE_Z'
