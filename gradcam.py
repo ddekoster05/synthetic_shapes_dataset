@@ -11,7 +11,8 @@ from torchvision import models
 from torchvision import transforms
 
 num_classes = 6
-model_type  = "2D"
+model_type  = "3D"
+layer = 10
 
 transform = transforms.Compose([
     transforms.Resize((224,224)),
@@ -212,7 +213,7 @@ def upsampleHeatmap(model_type, relu_weighted_activations, image):
 
     return upsampled_heatmap
 
-def display_images_2D(upsampled_heatmap, original_image):
+def display_images_2D(upsampled_heatmap, original_image, layer):
     """
     Show the upsampled heatmap and original image
 
@@ -227,6 +228,7 @@ def display_images_2D(upsampled_heatmap, original_image):
     resized_img = original_image.resize((224, 224))
     ax[0].imshow(resized_img)
     ax[0].axis("off")
+    ax[0].title.set_text('Original image')
 
     # Edge map for the input image
     edge_img = cv2.Canny(np.array(resized_img), 100, 200)
@@ -235,7 +237,9 @@ def display_images_2D(upsampled_heatmap, original_image):
     # Overlay the heatmap
     ax[1].imshow(upsampled_heatmap, alpha=0.5, cmap='coolwarm')
     ax[1].axis("off")
+    ax[1].title.set_text(f'Heatmap at layer {int(layer/2) if layer != 0 else 1}')
 
+    plt.savefig("heatmap.png")
     plt.show()
 
 def display_images_3D(upsampled_heatmap, original_image1, original_image2):
@@ -259,6 +263,7 @@ def display_images_3D(upsampled_heatmap, original_image1, original_image2):
     merged = merged.astype(np.uint8)
     ax[0].imshow(merged)
     ax[0].axis("off")
+    ax[0].title.set_text('Original image')
 
     # Edge map for the input image
     edge_img = cv2.Canny(merged, 100, 200)
@@ -267,7 +272,9 @@ def display_images_3D(upsampled_heatmap, original_image1, original_image2):
     # Overlay the heatmap
     ax[1].imshow(upsampled_heatmap, alpha=0.5, cmap='coolwarm')
     ax[1].axis("off")
+    ax[1].title.set_text(f'Heatmap at layer 4, at the final residual block')
 
+    plt.savefig("heatmap.png")
     plt.show()
 
 # Load the model of choice
@@ -276,11 +283,11 @@ loaded_model = load_model(model_type)
 replace_relu(loaded_model)
 
 # Prepare a test image
-image_directory = os.path.join(base_directory, "samples", "ring", "ring_informative_23.png")
+image_directory = os.path.join(base_directory, "samples", "ring", "ring_informative_2.png")
 original_image = Image.open(image_directory).convert("RGB")
 
-image1_directory = os.path.join(base_directory, "samples", "cube", "uninformative", "cube_uninformative_23.png")
-image2_directory = os.path.join(base_directory, "samples", "cube", "informative", "cube_informative_23.png")
+image1_directory = os.path.join(base_directory, "samples", "ring", "ring_informative_11.png")
+image2_directory = os.path.join(base_directory, "samples", "ring", "ring_informative_110.png")
 original_image1 = Image.open(image1_directory).convert("RGB")
 original_image2 = Image.open(image2_directory).convert("RGB")
 if model_type == "2D":
@@ -289,11 +296,11 @@ else:
     test_image = prepare_3D(original_image1, original_image2)
 
 # Obtain the relu weighted activations and upsample the heatmap.
-relu_weighted_activations = compute_heatmap(model_type, loaded_model, test_image, 1)
+relu_weighted_activations = compute_heatmap(model_type, loaded_model, test_image, layer)
 upsampled_heatmap = upsampleHeatmap(model_type, relu_weighted_activations, test_image)
 
 # Display the heatmap and the original images
 if model_type == "2D":
-    display_images_2D(upsampled_heatmap, original_image)
+    display_images_2D(upsampled_heatmap, original_image, layer)
 else:
     display_images_3D(upsampled_heatmap, original_image1, original_image2)
