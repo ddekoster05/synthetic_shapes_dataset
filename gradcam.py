@@ -11,7 +11,7 @@ from torchvision import models
 from torchvision import transforms
 
 num_classes = 6
-model_type  = "3D"
+model_type  = "2D"
 layer = 10
 
 transform = transforms.Compose([
@@ -83,9 +83,11 @@ def load_model(type):
     return model
 
 def print_prediction(pred):
-    pred_idx = torch.argmax(pred, dim=1).item()
+    probs = torch.softmax(pred, dim=1)
+    pred_idx = torch.argmax(probs, dim=1).item()
+    confidence = probs[0, pred_idx].item()
     class_name = class_names[pred_idx]
-    print(f"Prediction: {class_name} (class {pred_idx})")
+    print(f"Prediction: {class_name} (class {pred_idx}) with confidence {confidence:.4f}")
 
 def forwards_hook(module, input, output):
     """
@@ -283,7 +285,7 @@ loaded_model = load_model(model_type)
 replace_relu(loaded_model)
 
 # Prepare a test image
-image_directory = os.path.join(base_directory, "samples", "ring", "ring_informative_2.png")
+image_directory = os.path.join(base_directory, "real_images", "sphere_1", "i_1.jpg")
 original_image = Image.open(image_directory).convert("RGB")
 
 image1_directory = os.path.join(base_directory, "samples", "ring", "ring_informative_11.png")
