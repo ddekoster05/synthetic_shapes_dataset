@@ -12,10 +12,11 @@ from torchvision import transforms
 
 num_classes = 6
 model_type  = "2D"
-layer = 10
+layer = 6
 
 transform = transforms.Compose([
     transforms.Resize((224,224)),
+    transforms.Grayscale(num_output_channels=3),
     transforms.ToTensor(),
 ])
 
@@ -285,7 +286,7 @@ loaded_model = load_model(model_type)
 replace_relu(loaded_model)
 
 # Prepare a test image
-image_directory = os.path.join(base_directory, "real_images", "sphere_1", "i_1.jpg")
+image_directory = os.path.join(base_directory, "real_images", "sphere_1", "i_2.jpg")
 original_image = Image.open(image_directory).convert("RGB")
 
 image1_directory = os.path.join(base_directory, "samples", "ring", "ring_informative_11.png")
