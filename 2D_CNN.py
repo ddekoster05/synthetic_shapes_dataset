@@ -205,6 +205,6 @@ train(model, train_dataloader, validation_dataloader, optimizer, criterion,
 
 # Save trained model once finished
 torch.save({'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict()}, 'model_baseline.ckpt')
+            'optimizer_state_dict': optimizer.state_dict()}, 'model_baseline_backup.ckpt')
 
 test(model, dataset, test_dataset, device)

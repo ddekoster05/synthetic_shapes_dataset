@@ -379,6 +379,6 @@ train(model, train_dataloader, validation_dataloader, optimizer, criterion,
 
 # Save trained model once finished
 torch.save({'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict()}, 'model_multiview.ckpt')
+            'optimizer_state_dict': optimizer.state_dict()}, 'model_multiview_2.ckpt')
 
 test(model, test_dataloader, device)

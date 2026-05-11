@@ -11,8 +11,8 @@ from torchvision import models
 from torchvision import transforms
 
 num_classes = 6
-model_type  = "2D"
-layer = 6
+model_type  = "3D"
+layer = 10
 
 transform = transforms.Compose([
     transforms.Resize((224,224)),
@@ -69,12 +69,12 @@ def load_model(type):
     :return: a loaded model
     """
     if type == "2D":
-        checkpoint = torch.load(os.path.join(base_directory, "model_baseline.ckpt"))
+        checkpoint = torch.load(os.path.join(base_directory, "model_baseline_backup.ckpt"))
         model = models.alexnet()
         model.classifier[6] = nn.Linear(4096, num_classes)
         model.load_state_dict(checkpoint['model_state_dict'])
     else:
-        checkpoint = torch.load(os.path.join(base_directory, "model_multiview.ckpt"))
+        checkpoint = torch.load(os.path.join(base_directory, "model_multiview_0.ckpt"))
         model = models.video.r3d_18()
         model.fc = nn.Linear(model.fc.in_features, num_classes)
         model.load_state_dict(checkpoint['model_state_dict'])
@@ -157,6 +157,7 @@ def compute_heatmap(model_type, model, image, layer):
         layer = model.layer4[1].conv2
         hook = layer.register_forward_hook(save_activations)
     prediction = model(image)
+    print("Logits:", prediction)
     print_prediction(prediction)
     hook.remove()
 
@@ -280,22 +281,81 @@ def display_images_3D(upsampled_heatmap, original_image1, original_image2):
     plt.savefig("heatmap.png")
     plt.show()
 
+def preprocess(image):
+    """
+    This function preprocesses the image using traditional CV filters in order to reduce the domain gap
+    :param image: an image in the form of a numpy array
+    :return: a preprocessed image in the form of a numpy array
+    """
+
+    # Ensure uint8
+    if image.dtype != np.uint8:
+        image = (image * 255).astype(np.uint8)
+
+    # Convert image to grayscale
+    gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+
+    # Apply a Gaussian Blur
+    blur = cv2.GaussianBlur(gray, (15, 15), 0)
+
+    # Threshold (foreground mask)
+    _, mask = cv2.threshold(blur, 0, 255, cv2.THRESH_OTSU)
+
+    # Morphological cleanup
+    kernel = np.ones((7, 7), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+
+    # Keep largest connected component
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(mask)
+    if num_labels > 1:
+        largest = 1 + np.argmax(stats[1:, cv2.CC_STAT_AREA])
+        mask = (labels == largest).astype(np.uint8) * 255
+
+    # Apply mask (black background)
+    foreground = cv2.bitwise_and(gray, gray, mask=mask)
+
+    # Illumination correction
+    blur_large = cv2.GaussianBlur(foreground, (51, 51), 0)
+    illum_corrected = cv2.subtract(foreground, blur_large)
+
+    # Texture suppression
+    smooth = cv2.bilateralFilter(illum_corrected, 9, 75, 75)
+
+    _, final = cv2.threshold(smooth, 0, 255, cv2.THRESH_OTSU)
+
+    return final
+
 # Load the model of choice
 loaded_model = load_model(model_type)
 # Replace ReLU activations such that they don't switch
 replace_relu(loaded_model)
 
 # Prepare a test image
-image_directory = os.path.join(base_directory, "real_images", "sphere_1", "i_2.jpg")
+#image_directory = os.path.join(base_directory, "real_images", "ring_1", "i_2.jpg")
+image_directory = os.path.join(base_directory, "edited_images", "ring_informative_2.png")
 original_image = Image.open(image_directory).convert("RGB")
 
-image1_directory = os.path.join(base_directory, "samples", "ring", "ring_informative_11.png")
-image2_directory = os.path.join(base_directory, "samples", "ring", "ring_informative_110.png")
+image1_directory = os.path.join(base_directory, "real_images", "cylinder_1", "i_1.jpg")
+image2_directory = os.path.join(base_directory, "real_images", "cylinder_1", "i_2.jpg")
+#image1_directory = os.path.join(base_directory, "samples", "cube", "informative", "cube_informative_17.png")
+#image2_directory = os.path.join(base_directory, "samples", "cube", "informative", "cube_informative_170.png")
+#image1_directory = os.path.join(base_directory, "edited_images", "cube_informative_1.png")
+#image2_directory = os.path.join(base_directory, "edited_images", "cube_informative_1.png")
 original_image1 = Image.open(image1_directory).convert("RGB")
 original_image2 = Image.open(image2_directory).convert("RGB")
 if model_type == "2D":
     test_image = prepare_2D(original_image)
 else:
+    original_image1 = np.array(original_image1)
+    original_image2 = np.array(original_image)
+
+    original_image1 = preprocess(original_image1)
+    original_image2 = preprocess(original_image2)
+
+    original_image1 = Image.fromarray(original_image1)
+    original_image2 = Image.fromarray(original_image2)
+
     test_image = prepare_3D(original_image1, original_image2)
 
 # Obtain the relu weighted activations and upsample the heatmap.

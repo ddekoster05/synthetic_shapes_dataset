@@ -1,6 +1,13 @@
 .idea/
 .venv/
-samples/
-model_baseline.ckpt
-model_multiview.ckpt
+edited_images/
 evidence/
+real_images/
+samples/
+model_baseline_backup.ckpt
+model_multiview_0.ckpt
+model_multiview_1.ckpt
+model_multiview_2.ckpt
+model_multiview_new_0.ckpt
+model_multiview_new_1.ckpt
+model_multiview_new_2.ckpt
