@@ -348,7 +348,7 @@ if model_type == "2D":
     test_image = prepare_2D(original_image)
 else:
     original_image1 = np.array(original_image1)
-    original_image2 = np.array(original_image)
+    original_image2 = np.array(original_image2)
 
     original_image1 = preprocess(original_image1)
     original_image2 = preprocess(original_image2)
