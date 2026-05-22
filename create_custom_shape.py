@@ -26,9 +26,9 @@ def create_object():
     bsdf = material.node_tree.nodes["Principled BSDF"]
 
     # Set properties of the object
-    color = np.random.uniform(0.15,0.6)
+    color = 0.6
     bsdf.inputs["Base Color"].default_value = (color,color,color,1)
-    bsdf.inputs["Metallic"].default_value = np.random.uniform(0.0,1.0)
+    bsdf.inputs["Metallic"].default_value = 0
 
     # Assign material to object
     sampled_object.data.materials.append(material)
@@ -53,9 +53,9 @@ def create_camera_light(used_object):
     constraint.target = used_object
 
     # Place the light source and the camera around the object
-    light_object.location = (np.random.uniform(2.5, 5),
-                             np.random.uniform(2.5, 5),
-                             np.random.uniform(1.0, 5.0)
+    light_object.location = (5.0,
+                             1.5,
+                             4.5
                              )
     camera_object.location = (3.4,
                               3.4,
