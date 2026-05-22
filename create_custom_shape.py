@@ -8,11 +8,11 @@ output_directory = os.path.join(base_directory, "paired_images")
 
 def create_object():
     # Cube
-    base_size = 1.4
+    base_size = 1.65
     bpy.ops.mesh.primitive_cube_add(
         size=1,
-        location=(-0.2, -0.2, 0),
-        rotation=(0, 0, 0),
+        location=(-0.5, -0.7, 0),
+        rotation=(0, 0, math.pi/4+ math.radians(2)),
         scale=(base_size, base_size, base_size)
     )
 
@@ -26,7 +26,7 @@ def create_object():
     bsdf = material.node_tree.nodes["Principled BSDF"]
 
     # Set properties of the object
-    color = 0.6
+    color = 0.2
     bsdf.inputs["Base Color"].default_value = (color,color,color,1)
     bsdf.inputs["Metallic"].default_value = 0
 
@@ -53,16 +53,16 @@ def create_camera_light(used_object):
     constraint.target = used_object
 
     # Place the light source and the camera around the object
-    light_object.location = (5.0,
-                             1.5,
-                             4.5
+    light_object.location = (6,
+                             -2.5,
+                             4
                              )
-    camera_object.location = (3.4,
-                              3.4,
-                              3
+    camera_object.location = (3.0,
+                              3.0,
+                              3.0
                              )
 
-    camera_data.lens = 80
+    camera_data.lens = 52
 
     return camera_object
 
@@ -74,8 +74,8 @@ bpy.context.scene.world.node_tree.nodes["Background"].inputs["Color"].default_va
 
 # We set the rendering resolution to the resolution of the scraped image
 r = bpy.context.scene.render
-r.resolution_x = 1024
-r.resolution_y = 1024
+r.resolution_x = 257
+r.resolution_y = 196
 
 # Generate an object and a camera viewpoint.
 current_object = create_object()
@@ -83,5 +83,5 @@ generated_camera = create_camera_light(current_object)
 
 # Render the scene using the generated camera point
 bpy.context.scene.camera = generated_camera
-bpy.context.scene.render.filepath = f"{base_directory}/paired_images/custom_shape_1.png"
+bpy.context.scene.render.filepath = f"{base_directory}/paired_images/custom_shape_5.png"
 bpy.ops.render.render(write_still=True)
