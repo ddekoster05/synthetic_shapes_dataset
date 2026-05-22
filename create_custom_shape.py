@@ -8,10 +8,10 @@ output_directory = os.path.join(base_directory, "paired_images")
 
 def create_object():
     # Cube
-    base_size = 1.0
+    base_size = 1.65
     bpy.ops.mesh.primitive_cube_add(
         size=1,
-        location=(0, 0, 0),
+        location=(-0.5, -0.7, 0),
         rotation=(0, 0, math.pi / 4),
         scale=(base_size, base_size, base_size)
     )
@@ -42,7 +42,7 @@ def create_camera_light(used_object):
     bpy.context.collection.objects.link(light_object)
 
     # Set brightness of the light
-    light_data.energy = np.random.uniform(1000,10000)
+    light_data.energy = 5000
 
     camera_data = bpy.data.cameras.new(name="Camera")
     camera_object = bpy.data.objects.new(name="Camera", object_data=camera_data)
@@ -57,12 +57,10 @@ def create_camera_light(used_object):
                              np.random.uniform(2.5, 5),
                              np.random.uniform(1.0, 5.0)
                              )
-    camera_object.location = (2.5,
-                              2.5,
-                              2
+    camera_object.location = (3.0,
+                              3.0,
+                              3.0
                              )
-
-    #camera_data.lens = 45
 
     return camera_object
 
@@ -71,6 +69,11 @@ def create_camera_light(used_object):
 bpy.ops.object.select_all(action='SELECT')
 bpy.ops.object.delete(use_global=False)
 bpy.context.scene.world.node_tree.nodes["Background"].inputs["Color"].default_value = (0, 0, 0, 0)
+
+# We set the rendering resolution to the resolution of the scraped image
+r = bpy.context.scene.render
+r.resolution_x = 257
+r.resolution_y = 196
 
 # Generate an object and a camera viewpoint.
 current_object = create_object()
