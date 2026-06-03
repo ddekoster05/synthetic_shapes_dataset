@@ -2,7 +2,7 @@ import os
 from PIL import Image
 
 base_directory = os.path.dirname(os.path.abspath(__file__))
-alpha = 0.3
+alpha = 0.5
 
 def blend_image(alpha, image_1_directory, image_2_directory):
     # Open the images
@@ -10,14 +10,14 @@ def blend_image(alpha, image_1_directory, image_2_directory):
     image_2 = Image.open(image2_directory)
 
     # Make sure dimensions of images match
-    image_1 = image_1.resize(image_2.size)
+    image_2 = image_2.resize(image_1.size)
 
     # Blend image and save it
     blended = Image.blend(image_1, image_2, alpha=alpha)
-    blended.save("blended.png")
+    blended.save(r"paired_images/blended_5.png")
 
 # Retrieve the directories of the images that have to be blended
-image1_directory = os.path.join(base_directory, "paired_images", "custom_shape.png")
-image2_directory = os.path.join(base_directory, "paired_images", "1.png")
+image1_directory = os.path.join(base_directory, "paired_images", "custom_shape_5.png")
+image2_directory = os.path.join(base_directory, "paired_images", "5.jpg")
 
 blend_image(alpha, image1_directory, image2_directory)

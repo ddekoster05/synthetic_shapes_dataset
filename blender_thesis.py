@@ -10,6 +10,7 @@ output_directory = os.path.join(base_directory, "samples")
 
 classes = ['cube', 'pyramid', 'cylinder', 'cone', 'sphere', 'ring']
 sample_amount = 1000
+complex = True
 
 
 def create_object(object_type):
@@ -83,8 +84,17 @@ def create_object(object_type):
     bsdf.inputs["Base Color"].default_value = (color,color,color,1)
     bsdf.inputs["Metallic"].default_value = np.random.uniform(0.0,1.0)
 
+    if complex:
+        # Sample an amount of roughness
+        bsdf.inputs["Roughness"].default_value = np.random.uniform(0.2, 0.9)
+
     # Assign material to object
     sampled_object.data.materials.append(material)
+
+    if complex:
+        # Make edges more realistic
+        bevel = sampled_object.modifiers.new(name="Bevel", type='BEVEL')
+        bevel.width = np.random.uniform(0.001, 0.05)
 
     return sampled_object
 
@@ -97,9 +107,32 @@ def create_camera_light(used_object, informative):
     # Set brightness of the light
     light_data.energy = np.random.uniform(1000,10000)
 
+    if complex and informative:
+        # Set color of light
+        light_data.color = (
+            np.random.uniform(0.7, 1.0),
+            np.random.uniform(0.7, 1.0),
+            np.random.uniform(0.7, 1.0)
+        )
+
+        # Set background
+        world = bpy.context.scene.world
+        bg = np.random.uniform(0.0, 0.2)
+        world.node_tree.nodes["Background"].inputs["Color"].default_value = (
+            bg, bg, bg, 1
+        )
+
+        # Put a plane under the object
+        object_height = used_object.dimensions.z
+        bpy.ops.mesh.primitive_plane_add(size=10, location=(0, 0, -object_height / 2 - 0.01))
+
     camera_data = bpy.data.cameras.new(name="Camera")
     camera_object = bpy.data.objects.new(name="Camera", object_data=camera_data)
     bpy.context.collection.objects.link(camera_object)
+
+    if complex and informative:
+        # Set different focal lengths
+        camera_data.lens = np.random.uniform(18, 85)
 
     # This script aligns the camera to the object.
     constraint = camera_object.constraints.new(type='TRACK_TO')

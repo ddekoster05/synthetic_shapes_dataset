@@ -1,9 +1,13 @@
 import os
 import random
+
+import numpy as np
+
 random.seed(42)
 
 from tqdm import tqdm
 from PIL import Image
+import cv2
 
 import torch
 import torch.nn as nn
@@ -14,6 +18,7 @@ from torchvision import transforms
 batch_size = 256
 num_classes = 6
 configuration = 0
+preprocess = True
 
 transform = transforms.Compose([
     transforms.Resize((224,224)),
@@ -33,15 +38,42 @@ class PairDataset(Dataset):
 
     For the unambiguous shapes, two informative views are used.
     """
-    def __init__(self, root, informative_set, uninformative_set, configuration, transform=transform):
+    def __init__(self, root, informative_set, uninformative_set, configuration, transform=transform, filter="canny"):
         self.root = root
         self.informative_set = informative_set
         self.uninformative_set = uninformative_set
         self.configuration = configuration
         self.transform = transform
+        self.filter = filter
 
         self.pairs = []
         self.build_pairs()
+
+    def preprocess(self, image, filter):
+        # Convert image to grayscale
+        gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+
+        # Apply a Gaussian Blur
+        blur = cv2.GaussianBlur(gray, (15, 15), 0)
+
+        # Smooth textures
+        smooth = cv2.bilateralFilter(blur, 9, 75, 75)
+
+        # Posterize
+        levels = 6
+        poster = np.floor(smooth / (256 / levels)) * (256 / levels)
+
+        # Slight blur
+        final = cv2.GaussianBlur(poster.astype(np.uint8), (3, 3), 0)
+
+        if filter == "sobel":
+            final = cv2.Sobel(src=blur, ddepth=cv2.CV_64F, dx=1, dy=1, ksize=5)
+        elif filter == "laplacian":
+            final = cv2.Laplacian(src=blur, ddepth=cv2.CV_64F, ksize=5)
+        else:
+            final = cv2.Canny(image=blur, threshold1=100, threshold2=200)
+
+        return final
 
     def class_to_idx(self, class_name):
         classes = ["cone", "cube", "cylinder", "pyramid", "ring", "sphere"]
@@ -99,6 +131,16 @@ class PairDataset(Dataset):
             else:
                 image1 = Image.open(os.path.join(self.root, class_name, "uninformative", file1)).convert("RGB")
                 image2 = Image.open(os.path.join(self.root, class_name, "uninformative", file2)).convert("RGB")
+
+        image1 = np.asarray(image1)
+        image2 = np.asarray(image2)
+
+        if preprocess:
+            image1 = self.preprocess(image1, self.filter)
+            image2 = self.preprocess(image2, self.filter)
+
+        image1 = Image.fromarray(image1).convert("RGB")
+        image2 = Image.fromarray(image2).convert("RGB")
 
         # Transform objects according to passed transform.
         if self.transform:
@@ -312,7 +354,7 @@ def train(model, train_loader, val_loader, optimizer, criterion, device,
                 f'Validation set: Average loss = {avg_loss:.4f}, Accuracy = {accuracy:.4f}'
             )
 
-def test(model, test_loader, device):
+def test(model, test_loader, criterion, device):
     """
     Test the model accuracy per class.
 
@@ -326,6 +368,7 @@ def test(model, test_loader, device):
 
     num_samples = 0
     num_correct = 0
+    total_loss = 0.0
 
     with torch.no_grad():
         for inputs, labels in test_loader:
@@ -338,6 +381,8 @@ def test(model, test_loader, device):
             _, preds = torch.max(logits, dim=1)
             num_correct += (preds == labels).sum().item()
             num_samples += labels.size(0)
+            loss = criterion(logits, labels)
+            total_loss += loss.item()
 
             # Update per-class counters
             for cls_idx, cls_name in enumerate(classes):
@@ -351,6 +396,7 @@ def test(model, test_loader, device):
                           for cls in classes}
 
     # Report accuracy scores
+    print(f"Total loss: {total_loss:.4f}")
     print(f"Overall accuracy: {overall_accuracy:.4f}")
     print("Per-class accuracy:")
     for cls, acc in per_class_accuracy.items():
@@ -379,6 +425,6 @@ train(model, train_dataloader, validation_dataloader, optimizer, criterion,
 
 # Save trained model once finished
 torch.save({'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict()}, 'model_multiview_2.ckpt')
+            'optimizer_state_dict': optimizer.state_dict()}, 'model_multiview_0.ckpt')
 
-test(model, test_dataloader, device)
+test(model, test_dataloader, criterion, device)

@@ -8,6 +8,7 @@ random.seed(42)
 from tqdm import tqdm
 from PIL import Image
 import cv2
+import matplotlib.pyplot as plt
 
 import torch
 import torch.nn as nn
@@ -15,7 +16,7 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import models
 from torchvision import transforms
 
-batch_size = 1
+batch_size = 5
 num_classes = 6
 
 transform = transforms.Compose([
@@ -25,6 +26,9 @@ transform = transforms.Compose([
 
 # Locate the base directory
 base_directory = os.path.dirname(os.path.abspath(__file__))
+
+all_losses = []
+all_accuracies = []
 
 
 class PairDataset(Dataset):
@@ -210,6 +214,8 @@ def train(model, train_loader, optimizer, criterion, device,
             print(
                 f'Training set: Average loss = {avg_loss:.4f}, Accuracy = {accuracy:.4f}'
             )
+            all_losses.append(avg_loss)
+            all_accuracies.append(accuracy)
 
 
 # Create datasets
@@ -226,11 +232,29 @@ model.load_state_dict(checkpoint['model_state_dict'])
 model = model.to(device)
 
 # Setup optimizer, loss function, training loop
-optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=1e-4)
+optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9, weight_decay=1e-4)
 criterion = nn.CrossEntropyLoss()
 train(model, train_dataloader, optimizer, criterion,
-      device, num_epochs=20)
+      device, num_epochs=10)
 
 # Save trained model once finished
 torch.save({'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict()}, 'model_multiview_0_finetuned.ckpt')
+
+# Plot the training loss
+plt.clf()
+epochs = np.arange(1,11)
+plt.plot(epochs, all_losses)
+plt.title('Training Loss over Epochs')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.savefig('finetuning_training_loss.png')
+
+# Plot the training accuracy
+plt.clf()
+epochs = np.arange(1,11)
+plt.plot(epochs, all_accuracies)
+plt.title('Training Accuracy over Epochs')
+plt.xlabel('Epoch')
+plt.ylabel('Accuracy')
+plt.savefig('finetuning_training_accuracy.png')

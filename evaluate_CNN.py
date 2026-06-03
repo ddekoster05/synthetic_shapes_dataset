@@ -9,12 +9,17 @@ import cv2
 
 import torch
 import torch.nn as nn
+from torchvision.datasets import ImageFolder
 from torch.utils.data import Dataset, DataLoader
 from torchvision import models
 from torchvision import transforms
 
 batch_size = 1
 num_classes = 6
+model_type = "3D"
+
+# NOTE: preprocess only works for the 3D classifier, it does not do anything for the 2D classifier
+preprocess = True
 
 transform = transforms.Compose([
     transforms.Resize((224,224)),
@@ -35,35 +40,39 @@ class PairDataset(Dataset):
 
     For the unambiguous shapes, two informative views are used.
     """
-    def __init__(self, root, transform=transform):
+    def __init__(self, root, transform=transform, filter="canny"):
         self.root = root
         self.transform = transform
+        self.filter = filter
 
         self.classes = ["cone", "cube", "cylinder", "pyramid", "ring", "sphere"]
 
         self.pairs = []
         self.build_pairs()
 
-    def preprocess(self, image):
+    def preprocess(self, image, filter):
         # Convert image to grayscale
         gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
 
         # Apply a Gaussian Blur
         blur = cv2.GaussianBlur(gray, (15, 15), 0)
 
-        # smooth textures
+        # Smooth textures
         smooth = cv2.bilateralFilter(blur, 9, 75, 75)
 
-        # posterize
+        # Posterize
         levels = 6
         poster = np.floor(smooth / (256 / levels)) * (256 / levels)
 
-        # slight blur
+        # Slight blur
         final = cv2.GaussianBlur(poster.astype(np.uint8), (3, 3), 0)
 
-        final = cv2.Sobel(src=blur, ddepth=cv2.CV_64F, dx=1, dy=1, ksize=5)
-        #final = cv2.Canny(image=blur, threshold1=100, threshold2=200)
-        #final = cv2.Laplacian(src=blur, ddepth=cv2.CV_64F, ksize=5)
+        if filter == "sobel":
+            final = cv2.Sobel(src=blur, ddepth=cv2.CV_64F, dx=1, dy=1, ksize=5)
+        elif filter == "laplacian":
+            final = cv2.Laplacian(src=blur, ddepth=cv2.CV_64F, ksize=5)
+        else:
+            final = cv2.Canny(image=blur, threshold1=100, threshold2=200)
 
         return final
 
@@ -100,8 +109,9 @@ class PairDataset(Dataset):
         image1 = np.asarray(image1)
         image2 = np.asarray(image2)
 
-        image1 = self.preprocess(image1)
-        image2 = self.preprocess(image2)
+        if preprocess:
+            image1 = self.preprocess(image1, self.filter)
+            image2 = self.preprocess(image2, self.filter)
 
         image1 = Image.fromarray(image1).convert("RGB")
         image2 = Image.fromarray(image2).convert("RGB")
@@ -117,7 +127,7 @@ class PairDataset(Dataset):
 
         return x, label
 
-def test(model, test_loader, device):
+def test(model, test_loader, criterion, device):
     """
     Test the model accuracy per class.
 
@@ -131,6 +141,7 @@ def test(model, test_loader, device):
 
     num_samples = 0
     num_correct = 0
+    total_loss = 0.0
 
     with torch.no_grad():
         for inputs, labels in test_loader:
@@ -143,6 +154,8 @@ def test(model, test_loader, device):
             _, preds = torch.max(logits, dim=1)
             num_correct += (preds == labels).sum().item()
             num_samples += labels.size(0)
+            loss = criterion(logits, labels)
+            total_loss += loss.item()
 
             # Update per-class counters
             for cls_idx, cls_name in enumerate(classes):
@@ -156,23 +169,37 @@ def test(model, test_loader, device):
                           for cls in classes}
 
     # Report accuracy scores
+    print(f"Total loss: {total_loss:.4f}")
     print(f"Overall accuracy: {overall_accuracy:.4f}")
     print("Per-class accuracy:")
     for cls, acc in per_class_accuracy.items():
         print(f"{cls}: {acc:.4f}")
 
-# Create datasets
-test_dataset = PairDataset(os.path.join(base_directory, "scraped_images"))
-test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
-
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+criterion = nn.CrossEntropyLoss()
+
+if model_type == "2D":
+    # Create datasets
+    test_dataset = ImageFolder(root=os.path.join(base_directory, "scraped_images"), transform=transform)
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+
+    # Load checkpoint and model
+    checkpoint = torch.load(os.path.join(base_directory, "model_baseline_backup.ckpt"))
+    model = models.alexnet(weights=models.AlexNet_Weights.IMAGENET1K_V1)
+    model.classifier[6] = nn.Linear(4096, num_classes)
+else:
+    # Create datasets
+    test_dataset = PairDataset(os.path.join(base_directory, "scraped_images"))
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+
+    # Load checkpoint and model
+    checkpoint = torch.load(os.path.join(base_directory, "model_multiview_0_canny.ckpt"))
+    model = models.video.r3d_18()
+    model.fc = nn.Linear(model.fc.in_features, num_classes)
 
 # Load pretrained model
-checkpoint = torch.load(os.path.join(base_directory, "model_multiview_0_sobel.ckpt"))
-model = models.video.r3d_18()
-model.fc = nn.Linear(model.fc.in_features, num_classes)
 model.load_state_dict(checkpoint['model_state_dict'])
 model = model.to(device)
 model.eval()
 
-test(model, test_dataloader, device)
+test(model, test_dataloader, criterion, device)
